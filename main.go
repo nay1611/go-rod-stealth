@@ -1,74 +1,55 @@
 package main
 
 import (
-	"crypto/md5"
 	"fmt"
-	"strings"
-	"time"
-	log "github.com/sirupsen/logrus"
+	"log"
+	"os"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/stealth"
 )
 
-// func init() {
-//		launcher.NewBrowser().MustGet()
-// }
-
-const weeweebrowser = "chromium"
-
 func main() {
-	browserLauncher := launcher.New().Bin(weeweebrowser).MustLaunch()
-	browser := rod.New().ControlURL(browserLauncher).Timeout(time.Minute).MustConnect()
+	// Replace with your own email and password
+	email := "rootnj"
+	password := "Marune@123!"
+
+	// Launch a new browser instance with custom user agent
+	url := launcher.New().
+		Headless(false). // Headless mode set to false to see the browser window
+		NoSandbox(true). // Disable sandbox for some environments
+		Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").
+		MustLaunch()
+
+	browser := rod.New().ControlURL(url).MustConnect()
 	defer browser.MustClose()
 
-	log.Infoln("Launched Browser")
+	// Create a new page with stealth mode enabled
+	page := stealth.MustPage(browser)
 
-	stealthPage := stealth.MustPage(browser)
-	normalPage := browser.MustPage("https://bot.sannysoft.com")
+	// Navigate to the login page
+	page.MustNavigate("https://zorogaming.admin.enes.tech/authentication/login")
 
-	byPassBrowsing(stealthPage, browser)
-	normalBrowsing(normalPage, browser)
-}
+	// Wait for the username field to be present
+	page.MustElement(`body > cap-root > cap-authentication > main > cap-login > div > div.login__body > cap-login-form > div > form > div.eui-fieldset > div:nth-child(1) > rmn-form-control > div > input[type=text]`)
 
-func byPassBrowsing(page *rod.Page, browser *rod.Browser) {
-	bypassPage := stealth.MustPage(browser)
-	log.Infof("StealthJS hash: %x", md5.Sum([]byte(stealth.JS)))
+	// Fill in the login form using JS paths
+	page.MustElement(`body > cap-root > cap-authentication > main > cap-login > div > div.login__body > cap-login-form > div > form > div.eui-fieldset > div:nth-child(1) > rmn-form-control > div > input[type=text]`).MustInput(email)
+	page.MustElement(`body > cap-root > cap-authentication > main > cap-login > div > div.login__body > cap-login-form > div > form > div.eui-fieldset > div:nth-child(2) > rmn-password-input-control > div > input[type=password]`).MustInput(password)
+	page.MustElement(`body > cap-root > cap-authentication > main > cap-login > div > div.login__body > cap-login-form > div > form > div.dialog-footer > button`).MustClick()
 
-	bypassPage.MustNavigate("https://bot.sannysoft.com/")
-	log.Infoln("visiting testing page with stealth")
+	// Wait for a specific element that appears after login
+	// Replace with an actual selector that appears after a successful login
+	page.MustElement(`body > cap-root > cap-main-layout > main > cap-home > div > div.link-card-container > div:nth-child(1)`)
 
-	printReport(bypassPage, "stealth")
-}
+	fmt.Println("Login completed")
 
-func normalBrowsing(page *rod.Page, browser *rod.Browser) {
-	normalPage := browser.MustPage("https://bot.sannysoft.com/")
-	log.Infoln("visiting testing page without stealth")
-
-	printReport(normalPage, "normal")
-}
-
-func printReport(page *rod.Page, reportMode string) {
-	log.Infof("Fetching page report for %s mode", reportMode)
-
-	el := page.MustElement("#broken-image-dimensions.passed")
-	
-	log.Infoln("Checking for passed elements")
-	for _, row := range el.MustParents("table").First().MustElements("tr:nth-child(n+2)") {
-		log.Infof("Fetching Elements\t\t")
-		cells := row.MustElements("td")
-		key := cells[0].MustProperty("textContent")
-
-		if strings.HasPrefix(key.String(), "User Agent") {
-			fmt.Printf("\t\t%s: %t\n\n", key, !strings.Contains(cells[1].MustProperty("textContent").String(), "HeadlessChrome/"))
-		} else if strings.HasPrefix(key.String(), "Hairline Feature") {
-			continue
-		} else {
-			fmt.Printf("\t\t%s: %s\n\n", key, cells[1].MustProperty("textContent"))
-		}
+	// Take a screenshot after login
+	screenshotData := page.MustScreenshot()
+	if err := os.WriteFile("screenshot.png", screenshotData, 0644); err != nil {
+		log.Fatalf("Failed to save screenshot: %v", err)
+	} else {
+		fmt.Println("Screenshot saved as screenshot.png")
 	}
-
-	page.MustScreenshot("")
 }
-
